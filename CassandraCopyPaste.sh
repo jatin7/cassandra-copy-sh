@@ -26,35 +26,52 @@ echo "";
 
 # Ask for destination Cassandra's host, keyspace, username, and password
 echo "-------------Destination Keyspace------------";
-read -p "Host: " HOST_;
-read -p "Keyspace: " KSPC_;
-read -p "Username: " USER_;
-read -s -p "Password: " PASS_;
+read -p "Host: " HOST_d;
+read -p "Keyspace: " KSPC_d;
+read -p "Username: " USER_d;
+read -s -p "Password: " PASS_d;
 echo "";
 
-# Loop through tables
-n=0;
-while IFS='' read -r line || [[ -n "$line" ]]; do
-    # Perform copy operation
-    echo "Copying table: $line";
-    `cqlsh $_HOST -u $_USER -p $_PASS -e "COPY $_KSPC.$line TO '$line.$ext' ;" > /dev/null`;
+# Ask for user confirmation to proceed
+ans_n="no";
+ans_y="yes";
+l=`wc -l < $f_tables`;
+echo "WARNING! You are about to enter the danger zone.";
+echo "The following actions need your confirmation.";
+echo "1. Copy $l table(s) from $_KSPC@$_HOST";
+echo "2. Truncate respective tables at $KSPC_d@$HOST_d";
+echo "3. Patch up tables to $KSPC_d@$HOST_d";
+while [[ $p != @($ans_n|$ans_y) ]]; do
+    read -p "Are you sure you want to proceed? (yes)/(no): " p;
+done
 
-    # Clean up the table at the destination keyspace
-    echo "Truncating table: $line";
-    `cqlsh $HOST_ -u $USER_ -p $PASS_ -e "TRUNCATE TABLE $KSPC_.$line ;" > /dev/null`;
+# Loop through tables if user has confirmed
+if [[ $p == $ans_y ]]; then
+    n=0;
+    while IFS='' read -r line || [[ -n "$line" ]]; do
+        # Perform copy operation
+        echo "Copying table: $line";
+        `cqlsh $_HOST -u $_USER -p $_PASS -e "COPY $_KSPC.$line TO '$line.$ext' ;" > /dev/null`;
 
-    # Patch up the table at the destination keyspace
-    echo "Pasting table: $line";
-    `cqlsh $HOST_ -u $USER_ -p $PASS_ -e "COPY $KSPC_.$line FROM '$line.$ext' ;" > /dev/null`;
+        # Clean up the table at the destination keyspace
+        echo "Truncating table: $line";
+        `cqlsh $HOST_d -u $USER_d -p $PASS_d -e "TRUNCATE TABLE $KSPC_d.$line ;" > /dev/null`;
 
-    # Remove the copied table file
-    `rm $line.$ext`;
+        # Patch up the table at the destination keyspace
+        echo "Pasting table: $line";
+        `cqlsh $HOST_d -u $USER_d -p $PASS_d -e "COPY $KSPC_d.$line FROM '$line.$ext' ;" > /dev/null`;
 
-    ((n++));
-done < "$f_tables";
+        # Remove the copied table file
+        `rm $line.$ext`;
 
-# Last message
-echo "$n table(s) copied.";
+        ((n++));
+    done < "$f_tables";
+
+    # Last message
+    echo "$n table(s) copied.";
+else
+    echo "Operation canceled by user.";
+fi
 
 # Remove temporary files
 `rm $f_keyspace`;
