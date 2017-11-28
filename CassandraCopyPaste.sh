@@ -65,6 +65,9 @@ if [[ $p == $ans_y ]]; then
         `rm $line.$ext`;
 
         ((n++));
+        
+        # Report
+        echo "Done $n/$l";
     done < "$f_tables";
 
     # Last message
